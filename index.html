@@ -1,0 +1,375 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>3D FPS with Camera Bobbing and Enhanced Environment</title>
+    <script src="https://cdn.babylonjs.com/babylon.js"></script>
+    <style>
+        html, body {
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            margin: 0;
+            padding: 0;
+        }
+        canvas {
+            width: 100%;
+            height: 100%;
+            touch-action: none;
+        }
+    </style>
+</head>
+<body>
+    <canvas id="renderCanvas"></canvas>
+    <script>
+        var canvas = document.getElementById("renderCanvas");
+        var engine = new BABYLON.Engine(canvas, true);
+
+        var createScene = function () {
+            var scene = new BABYLON.Scene(engine);
+            scene.collisionsEnabled = true;
+            
+            // Enhanced lighting and shadows
+            var light = new BABYLON.DirectionalLight("dir01", new BABYLON.Vector3(0, -1, 1), scene);
+            light.position = new BABYLON.Vector3(20, 40, -20);
+            light.intensity = 0.1;
+            light.shadowMinZ = 1;
+            light.shadowMaxZ = 100;
+            light.shadowOrthoScale = 2.0;
+            
+            // Increase shadow map resolution
+var shadowGenerator = new BABYLON.ShadowGenerator(4096, light);
+
+// Increase blur kernel for smoother shadows
+shadowGenerator.blurKernel = 64;
+
+// Adjust light intensity
+light.intensity = 0.5; // Increase or decrease as needed
+
+            shadowGenerator.useBlurExponentialShadowMap = true;
+          
+
+            // Camera with bobbing effect
+            var camera = new BABYLON.UniversalCamera("camera1", new BABYLON.Vector3(0, 2, 0), scene);
+            camera.attachControl(canvas, true);
+            camera.minZ = 0.1;
+            camera.speed = 0.2;
+            camera.angularSensibility = 1000;
+            camera.applyGravity = true;
+            camera.ellipsoid = new BABYLON.Vector3(1, 1, 1);
+            camera.checkCollisions = true;
+
+            var bobbingAmount = 0.15;
+            var bobbingSpeed = 0.1;
+            var bobbingTime = 0;
+
+            // Ground
+            var ground = BABYLON.MeshBuilder.CreateGround("ground", {width: 50, height: 50}, scene);
+            var groundMaterial = new BABYLON.StandardMaterial("groundMat", scene);
+            groundMaterial.diffuseColor = new BABYLON.Color3(1, 1, 1); // White ground
+            ground.material = groundMaterial;
+            ground.checkCollisions = true;
+
+            // Superhot-style walls and floor textures
+            // Create a texture for the walls
+            var wallMaterial = new BABYLON.StandardMaterial("wallMat", scene);
+var wallTexture = new BABYLON.Texture("wall.jpg", scene);
+
+// Apply the texture to the wall material
+wallMaterial.diffuseTexture = wallTexture;
+
+
+            // Create walls
+            // Roof with lights
+            var roof = BABYLON.MeshBuilder.CreateBox("roof", { height: 1, width: 50, depth: 50 }, scene);
+roof.position = new BABYLON.Vector3(0, 9, 0);
+roof.checkCollisions = true;
+
+// Create point lights on the roof
+// Create point lights on the roof pointing downwards
+var light1 = new BABYLON.PointLight("light1", new BABYLON.Vector3(-20, 10, -20), scene);
+light1.diffuse = new BABYLON.Color3(1, 1, 1);
+light1.specular = new BABYLON.Color3(1, 1, 1);
+light1.intensity = 0.1;
+light1.direction = new BABYLON.Vector3(0, -1, 0); // Set direction downwards
+
+var light2 = new BABYLON.PointLight("light2", new BABYLON.Vector3(20, 10, 20), scene);
+light2.diffuse = new BABYLON.Color3(1, 1, 1);
+light2.specular = new BABYLON.Color3(1, 1, 1);
+light2.intensity = 0.1;
+light2.direction = new BABYLON.Vector3(0, -1, 0); // Set direction downwards
+
+// Optionally, add shadows to the lights
+light1.shadowEnabled = true;
+light1.shadowMinZ = 1;
+light1.shadowMaxZ = 100;
+
+
+
+            var wall1 = BABYLON.MeshBuilder.CreateBox("wall1", {height: 10, width: 50, depth: 1}, scene);
+            wall1.position = new BABYLON.Vector3(0, 3.5, 25);
+            wall1.material = wallMaterial;
+            wall1.checkCollisions = true;
+            wall1.receiveShadows = true;
+
+            var wall2 = BABYLON.MeshBuilder.CreateBox("wall2", {height: 10, width: 50, depth: 1}, scene);
+            wall2.position = new BABYLON.Vector3(0, 3.5, -25);
+            wall2.material = wallMaterial;
+            wall2.checkCollisions = true;
+            wall2.receiveShadows = true;
+
+            var wall3 = BABYLON.MeshBuilder.CreateBox("wall3", {height: 10, width: 50, depth: 1}, scene);
+            wall3.position = new BABYLON.Vector3(-25, 3.5, 0);
+            wall3.rotation.y = Math.PI / 2;
+            wall3.material = wallMaterial;
+            wall3.checkCollisions = true;
+            wall3.receiveShadows = true;
+
+            var wall4 = BABYLON.MeshBuilder.CreateBox("wall4", {height: 10, width: 50, depth: 1}, scene);
+            wall4.position = new BABYLON.Vector3(25, 3.5, 0);
+            wall4.rotation.y = Math.PI / 2;
+            wall4.material = wallMaterial;
+            wall4.checkCollisions = true;
+            wall4.receiveShadows = true;
+
+            // Player and shadow
+            var player = BABYLON.MeshBuilder.CreateBox("player", {height: 2, width: 1, depth: 1}, scene);
+            player.position = new BABYLON.Vector3(0, 1, 0);
+            player.checkCollisions = true;
+            player.receiveShadows = true;
+            shadowGenerator.addShadowCaster(player);
+            
+            // Movement controls
+            var moveForward = false;
+            var moveBackward = false;
+            var moveLeft = false;
+            var moveRight = false;
+
+            window.addEventListener("keydown", function(event) {
+                switch(event.keyCode) {
+                    case 87: // W
+                        moveForward = true;
+                        break;
+                    case 83: // S
+                        moveBackward = true;
+                        break;
+                    case 65: // A
+                        moveLeft = true;
+                        break;
+                    case 68: // D
+                        moveRight = true;
+                        break;
+                }
+            });
+
+            window.addEventListener("keyup", function(event) {
+                switch(event.keyCode) {
+                    case 87: // W
+                        moveForward = false;
+                        break;
+                    case 83: // S
+                        moveBackward = false;
+                        break;
+                    case 65: // A
+                        moveLeft = false;
+                        break;
+                    case 68: // D
+                        moveRight = false;
+                        break;
+                }
+            });
+
+            scene.onBeforeRenderObservable.add(function() {
+    var forwardVector = camera.getForwardRay().direction;
+    forwardVector.y = 0;
+    forwardVector.normalize();
+    
+    var rightVector = new BABYLON.Vector3(forwardVector.z, 0, -forwardVector.x);
+
+    var moveVector = new BABYLON.Vector3.Zero();
+    var isMoving = false;
+
+    if (moveForward) {
+        moveVector.addInPlace(forwardVector);
+        isMoving = true;
+    }
+    if (moveBackward) {
+        moveVector.subtractInPlace(forwardVector);
+        isMoving = true;
+    }
+    if (moveLeft) {
+        moveVector.subtractInPlace(rightVector);
+        isMoving = true;
+    }
+    if (moveRight) {
+        moveVector.addInPlace(rightVector);
+        isMoving = true;
+    }
+
+    if (isMoving) {
+        moveVector.normalize();
+        moveVector.scaleInPlace(camera.speed);
+        player.moveWithCollisions(moveVector);
+
+        // Camera bobbing effect
+        bobbingTime += bobbingSpeed;
+        var bobbingOffset = Math.sin(bobbingTime) * bobbingAmount;
+        camera.position = new BABYLON.Vector3(player.position.x, player.position.y + 1.6 + bobbingOffset, player.position.z);
+    }
+});
+
+
+
+    // Define bullet properties
+    var bullets = []; // Array to store bullets
+    var bulletLifeSpan = 3000; // Lifespan of each bullet in milliseconds
+
+    // Function to create a particle system for the bullet
+    function createBulletParticles(bullet) {
+        var particleSystem = new BABYLON.ParticleSystem("particles", 2000, scene);
+        particleSystem.particleTexture = new BABYLON.Texture("https://assets.babylonjs.com/particles/flare.png", scene);
+
+        // Where the particles come from
+        particleSystem.emitter = bullet;
+
+        // Colors of all particles
+        particleSystem.color1 = new BABYLON.Color4(1, 0, 0, 1.0);
+        particleSystem.color2 = new BABYLON.Color4(1, 1, 0, 1.0);
+        particleSystem.colorDead = new BABYLON.Color4(0, 0, 0, 0.0);
+
+        // Size of each particle (random between...
+        particleSystem.minSize = 0.01;
+        particleSystem.maxSize = 0.05;
+
+        // Life time of each particle (random between...
+        particleSystem.minLifeTime = 0.001;
+        particleSystem.maxLifeTime = 0.4;
+
+        // Emission rate
+        particleSystem.emitRate = 1000;
+
+        // Blend mode: BLENDMODE_ONEONE, or BLENDMODE_STANDARD
+        particleSystem.blendMode = BABYLON.ParticleSystem.BLENDMODE_ONEONE;
+
+        // Set the gravity of all particles
+        particleSystem.gravity = new BABYLON.Vector3(0, -9.81, 0);
+
+        // Direction of each particle after it has been emitted
+        particleSystem.direction1 = new BABYLON.Vector3(-7, 8, 3);
+        particleSystem.direction2 = new BABYLON.Vector3(7, 8, -3);
+
+        // Angular speed, in radians
+        particleSystem.minAngularSpeed = 0;
+        particleSystem.maxAngularSpeed = Math.PI;
+
+        // Speed
+        particleSystem.minEmitPower = 0.5;
+        particleSystem.maxEmitPower = 1.5;
+        particleSystem.updateSpeed = 0.005;
+
+        // Start the particle system
+        particleSystem.start();
+    }
+
+    // Function to shoot bullets
+    function shoot() {
+        // Create bullet at camera position
+        var bullet = BABYLON.MeshBuilder.CreateSphere("bullet", { diameter: 0.2 }, scene);
+        bullet.position = camera.position.clone();
+
+        // Calculate direction vector
+        var shootingDirection = camera.getTarget().subtract(camera.position);
+        shootingDirection.normalize();
+
+        // Set initial velocity of bullet
+        bullet.physicsImpostor = new BABYLON.PhysicsImpostor(bullet, BABYLON.PhysicsImpostor.SphereImpostor, { mass: 0.1, restitution: 0 }, scene);
+        bullet.physicsImpostor.applyImpulse(shootingDirection.scale(50), bullet.position);
+
+        // Create particle system for the bullet
+        createBulletParticles(bullet);
+
+        // Store shooting direction of the bullet
+        bullet.shootingDirection = shootingDirection;
+
+        // Store the bullet in the array
+        bullets.push(bullet);
+
+        // Remove bullet after some time
+        setTimeout(function() {
+            bullet.dispose();
+            // Remove bullet from the array
+            var index = bullets.indexOf(bullet);
+            if (index !== -1) {
+                bullets.splice(index, 1);
+            }
+        }, bulletLifeSpan);
+    }
+
+    // Function to move bullets in each frame
+    function moveBullets() {
+        bullets.forEach(function(bullet) {
+            bullet.translate(bullet.shootingDirection.scale(0.9), 1, BABYLON.Space.WORLD);
+        });
+    }
+
+    // Listen for mouse clicks
+    canvas.addEventListener("click", function() {
+        shoot();
+    });
+
+    // Move the bullets in each frame
+    scene.onBeforeRenderObservable.add(moveBullets);
+
+
+
+    // Listen for mouse clicks
+    canvas.addEventListener("click", function() {
+        shoot();
+    });
+
+    // Move the bullets in each frame
+    scene.onBeforeRenderObservable.add(moveBullets);
+
+
+
+
+            // Pointer lock and mouse look
+            canvas.addEventListener("click", function() {
+                canvas.requestPointerLock();
+            });
+
+            document.addEventListener("pointerlockchange", function() {
+                if (document.pointerLockElement === canvas) {
+                    document.addEventListener("mousemove", onMouseMove, false);
+                } else {
+                    document.removeEventListener("mousemove", onMouseMove, false);
+                }
+            });
+
+            function onMouseMove(event) {
+                var movementX = event.movementX || event.mozMovementX || event.webkitMovementX || 0;
+                var movementY = event.movementY || event.mozMovementY || event.webkitMovementY || 0;
+
+                camera.rotation.y -= movementX * 0.002;
+                camera.rotation.x -= movementY * 0.002;
+
+                if (camera.rotation.x < -Math.PI / 2) {
+                    camera.rotation.x = -Math.PI / 2;
+                } else if (camera.rotation.x > Math.PI / 2) {
+                    camera.rotation.x = Math.PI / 2;
+                }
+            }
+
+            return scene;
+        };
+
+        var scene = createScene();
+        engine.runRenderLoop(function () {
+            scene.render();
+        });
+
+        window.addEventListener("resize", function () {
+            engine.resize();
+        });
+    </script>
+</body>
+</html>
